@@ -5,13 +5,6 @@
 #   CI_PUSH_USER / CI_PUSH_TOKEN : push de l'image vers le registre Gitea.
 #   GITEA_TOKEN                  : commit du tag (permissions.contents: write).
 #
-# ── Portage depuis la CI Java (Jib) ──────────────────────────────────────────
-# Jib poussait l'image sans daemon Docker. L'equivalent Go est ko : il compile
-# le binaire et pousse l'image OCI directement au registre, sans Docker-in-Docker
-# et sans Dockerfile. --insecure-registry remplace -DsendCredentialsOverHttp
-# (le registre Gitea est joint en HTTP par nom de domaine, jamais par IP).
-# On suppose, comme pour le runner maven cote Java, que la toolchain Go est deja
-# dans l'image du runner -- pas de setup-go qui la retelechargerait a chaque run.
 name: build-and-push
 on:
   push:
