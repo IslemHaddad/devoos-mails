@@ -76,3 +76,4 @@ Deployment's `securityContext`.
 > Edit before first deploy: the ingress host/class, the namespace in
 > `kustomization.yaml`, and the registry path if your group differs.
 # devoos-mails
+# devoos-mails
