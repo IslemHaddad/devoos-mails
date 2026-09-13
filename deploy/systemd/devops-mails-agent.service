@@ -1,0 +1,26 @@
+[Unit]
+Description=devops-mails worker agent (runs a check, triggers email via master)
+Documentation=https://gitea.eadn.dz/eadn-factory/devops-mails
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Toute la config passe par des variables d'environnement (voir agent.env).
+EnvironmentFile=/etc/devops-mails/agent.env
+ExecStart=/usr/local/bin/devops-mails-worker
+Restart=on-failure
+RestartSec=5
+
+# Durcissement. Le check tourne via `sh -c` : si ta commande doit lire des
+# fichiers proteges, ajuste User= (ou commente-le pour tourner en root).
+# User=devops-mails
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+
+[Install]
+WantedBy=multi-user.target
