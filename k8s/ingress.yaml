@@ -1,0 +1,30 @@
+# Expose l'app via l'Ingress Controller du cluster.
+# Ajuste ingressClassName et le host a ton environnement.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: devops-mails
+  labels:
+    app: devops-mails
+  annotations:
+    # Decommente pour du TLS automatique via cert-manager :
+    # cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: devops-mails.eadn.dz
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: devops-mails
+                port:
+                  number: 80
+  # Decommente pour activer TLS (necessite cert-manager ou un secret manuel) :
+  # tls:
+  #   - hosts:
+  #       - devops-mails.eadn.dz
+  #     secretName: devops-mails-tls

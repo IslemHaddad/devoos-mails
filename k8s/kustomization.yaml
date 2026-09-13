@@ -1,0 +1,22 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Namespace cible (adapte au tien).
+namespace: eadn
+
+resources:
+  - agent-secret.yaml
+  - pvc.yaml
+  - deployment.yaml
+  - service.yaml
+  - ingress.yaml
+  - worker-deployment.yaml
+
+# La CI surcharge uniquement le tag (les images portent deja leur nom definitif).
+# L'etape sed du workflow s'ancre sur chaque ligne `- name:` puis reecrit
+# `newTag:` a la ligne SUIVANTE -- ne renomme pas ces entrees sans ajuster le motif.
+images:
+  - name: gitea.eadn.dz/eadn-factory/devops-mails
+    newTag: dev
+  - name: gitea.eadn.dz/eadn-factory/devops-mails-worker
+    newTag: dev

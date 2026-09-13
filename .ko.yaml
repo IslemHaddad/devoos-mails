@@ -1,0 +1,20 @@
+# ko : deux binaires, deux images.
+#  - master (.)          : distroless static, non-root (colle au securityContext).
+#  - worker (./cmd/worker): a besoin d'un shell (`sh -c <check>`), d'ou une base
+#                           busybox/alpine plutot que distroless static.
+defaultBaseImage: gcr.io/distroless/static:nonroot
+baseImageOverrides:
+  devops-mails/cmd/worker: docker.io/library/alpine:3.20
+builds:
+  - id: master
+    main: .
+    env:
+      - CGO_ENABLED=0
+    ldflags:
+      - -s -w
+  - id: worker
+    main: ./cmd/worker
+    env:
+      - CGO_ENABLED=0
+    ldflags:
+      - -s -w

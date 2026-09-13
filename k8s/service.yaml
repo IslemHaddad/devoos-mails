@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: devops-mails
+  labels:
+    app: devops-mails
+spec:
+  type: ClusterIP
+  selector:
+    app: devops-mails
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+    # Port agent : les workers in-cluster s'y connectent (http://devops-mails:8671).
+    # Pour des workers systemd HORS cluster, expose ce port via un Service
+    # LoadBalancer/NodePort dedie (l'Ingress HTTP ne route que :80).
+    - name: agent
+      port: 8671
+      targetPort: agent

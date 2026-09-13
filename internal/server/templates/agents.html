@@ -1,0 +1,52 @@
+{{ define "agents.html" }}
+{{ template "head" . }}
+<h1>Agents</h1>
+<p class="lead">Workers connect to the master on <code>:8671</code>. When a worker's
+  check exits 0, it triggers a send through the SMTP config above.</p>
+
+<section>
+  <h2>Registered workers</h2>
+  {{ if .Workers }}
+  <table class="results">
+    <thead><tr><th>Worker</th><th>Host</th><th>Check command</th><th>Interval</th><th>Triggers</th><th>Last seen</th></tr></thead>
+    <tbody>
+    {{ range .Workers }}
+      <tr>
+        <td>{{ .ID }}</td>
+        <td>{{ .Hostname }}</td>
+        <td><code>{{ .Command }}</code></td>
+        <td>{{ .IntervalSec }}s</td>
+        <td>{{ .Triggers }}</td>
+        <td>{{ .LastSeen.Format "2006-01-02 15:04:05" }}</td>
+      </tr>
+    {{ end }}
+    </tbody>
+  </table>
+  {{ else }}
+  <div class="banner warn">No workers have registered yet.</div>
+  {{ end }}
+</section>
+
+<section>
+  <h2>Recent triggers</h2>
+  {{ if .Events }}
+  <table class="results">
+    <thead><tr><th>Time</th><th>Worker</th><th>Exit</th><th>Sent</th><th>Detail</th></tr></thead>
+    <tbody>
+    {{ range .Events }}
+      <tr class="{{ if .Error }}row-fail{{ else }}row-ok{{ end }}">
+        <td>{{ .Time.Format "15:04:05" }}</td>
+        <td>{{ .WorkerID }}</td>
+        <td>{{ .ExitCode }}</td>
+        <td>{{ .Sent }}/{{ .Recipients }}</td>
+        <td>{{ if .Error }}{{ .Error }}{{ else }}{{ .Message }}{{ end }}</td>
+      </tr>
+    {{ end }}
+    </tbody>
+  </table>
+  {{ else }}
+  <div class="banner">No triggers recorded yet.</div>
+  {{ end }}
+</section>
+{{ template "foot" . }}
+{{ end }}

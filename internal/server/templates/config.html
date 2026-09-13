@@ -1,0 +1,54 @@
+{{ define "config.html" }}
+{{ template "head" . }}
+<h1>SMTP Configuration</h1>
+<p class="lead">Configure the outbound mail relay, like a postfix <code>relayhost</code>.</p>
+
+{{ if .Saved }}<div class="banner ok">Configuration saved.</div>{{ end }}
+{{ if .Error }}<div class="banner err">{{ .Error }}</div>{{ end }}
+
+<form method="post" action="/config" class="form">
+  <fieldset>
+    <legend>Server</legend>
+    <label>Host
+      <input type="text" name="host" value="{{ .Config.Host }}" placeholder="smtp.example.com" required>
+    </label>
+    <label>Port
+      <input type="number" name="port" value="{{ .Config.Port }}" min="1" max="65535" required>
+    </label>
+    <label>Encryption
+      <select name="encryption">
+        <option value="none" {{ if eq .Config.Encryption "none" }}selected{{ end }}>None (plain, e.g. :25)</option>
+        <option value="starttls" {{ if eq .Config.Encryption "starttls" }}selected{{ end }}>STARTTLS (e.g. :587)</option>
+        <option value="ssl" {{ if eq .Config.Encryption "ssl" }}selected{{ end }}>SSL/TLS (e.g. :465)</option>
+      </select>
+    </label>
+    <label class="check">
+      <input type="checkbox" name="skip_verify" {{ if .Config.SkipVerify }}checked{{ end }}>
+      Skip TLS certificate verification (self-signed relays)
+    </label>
+  </fieldset>
+
+  <fieldset>
+    <legend>Authentication <span class="muted">(leave blank for an unauthenticated relay)</span></legend>
+    <label>Username
+      <input type="text" name="username" value="{{ .Config.Username }}" autocomplete="off">
+    </label>
+    <label>Password
+      <input type="password" name="password" value="{{ .Config.Password }}" autocomplete="new-password">
+    </label>
+  </fieldset>
+
+  <fieldset>
+    <legend>Sender identity</legend>
+    <label>From name
+      <input type="text" name="from_name" value="{{ .Config.FromName }}" placeholder="Ops Team">
+    </label>
+    <label>From email
+      <input type="email" name="from_email" value="{{ .Config.FromEmail }}" placeholder="ops@example.com">
+    </label>
+  </fieldset>
+
+  <button type="submit" class="btn primary">Save configuration</button>
+</form>
+{{ template "foot" . }}
+{{ end }}

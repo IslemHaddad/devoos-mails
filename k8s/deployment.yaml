@@ -1,0 +1,81 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: devops-mails
+  labels:
+    app: devops-mails
+spec:
+  replicas: 1
+  # RWO Longhorn : le volume ne peut etre monte que par un pod a la fois.
+  # Recreate arrete l'ancien pod avant de creer le nouveau, sinon le rollout
+  # bloque sur un multi-attach ("Volume is already attached to node ...").
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: devops-mails
+  template:
+    metadata:
+      labels:
+        app: devops-mails
+    spec:
+      securityContext:
+        # uid de l'image distroless:nonroot (voir .ko.yaml). Le fsGroup permet
+        # au process non-root d'ecrire dans le volume Longhorn monte.
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+      containers:
+        - name: devops-mails
+          # Le tag est surcharge par k8s/kustomization.yaml (ecrit par la CI).
+          image: gitea.eadn.dz/eadn-factory/devops-mails:dev
+          args:
+            - "--addr=:8080"
+            - "--config=/data/smtp-config.json"
+          env:
+            - name: GIN_MODE
+              value: release
+            # Jeton partage master <-> workers. Sans lui l'endpoint :8671 accepte
+            # n'importe quel appel (et donc n'importe quel envoi d'email).
+            - name: AGENT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: devops-mails-agent
+                  key: token
+          ports:
+            - name: http
+              containerPort: 8080
+            - name: agent
+              containerPort: 8671
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 2
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 25m
+              memory: 32Mi
+            limits:
+              cpu: 250m
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: data
+              mountPath: /data
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: devops-mails-data

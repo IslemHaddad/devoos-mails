@@ -1,0 +1,31 @@
+{{ define "index.html" }}
+{{ template "head" . }}
+<h1>Dashboard</h1>
+
+{{ if .Configured }}
+  <div class="banner ok">SMTP relay is configured. You are ready to send.</div>
+{{ else }}
+  <div class="banner warn">No SMTP relay configured yet. <a href="/config">Set it up →</a></div>
+{{ end }}
+
+<div class="cards">
+  <section class="card">
+    <h2>Current relay</h2>
+    <table class="kv">
+      <tr><th>Host</th><td>{{ .Config.Host }}</td></tr>
+      <tr><th>Port</th><td>{{ .Config.Port }}</td></tr>
+      <tr><th>Encryption</th><td>{{ .Config.Encryption }}</td></tr>
+      <tr><th>Auth user</th><td>{{ if .Config.Username }}{{ .Config.Username }}{{ else }}<em>none</em>{{ end }}</td></tr>
+      <tr><th>From</th><td>{{ if .Config.FromName }}{{ .Config.FromName }} &lt;{{ .Config.FromEmail }}&gt;{{ else }}{{ .Config.FromEmail }}{{ end }}</td></tr>
+    </table>
+    <a class="btn" href="/config">Edit configuration</a>
+  </section>
+
+  <section class="card">
+    <h2>Send mail</h2>
+    <p>Compose a message and deliver it to a list of target addresses through the configured relay.</p>
+    <a class="btn primary" href="/compose">Compose &amp; send →</a>
+  </section>
+</div>
+{{ template "foot" . }}
+{{ end }}

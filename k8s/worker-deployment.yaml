@@ -1,0 +1,57 @@
+# Worker en pod : execute un check dans le cluster et declenche l'envoi via le
+# master. Un pod ne voit que SON systeme de fichiers -- pour surveiller un
+# fichier de l'hote, prefere le service systemd (deploy/systemd/) ou monte un
+# hostPath/volume partage. Utile ici pour des checks reseau/HTTP ou sur volume.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: devops-mails-worker
+  labels:
+    app: devops-mails-worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: devops-mails-worker
+  template:
+    metadata:
+      labels:
+        app: devops-mails-worker
+    spec:
+      containers:
+        - name: worker
+          image: gitea.eadn.dz/eadn-factory/devops-mails-worker:dev
+          env:
+            - name: MASTER_URL
+              value: http://devops-mails:8671
+            - name: AGENT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: devops-mails-agent
+                  key: token
+            - name: WORKER_NAME
+              value: k8s-http-check
+            # Exemple : vrai (exit 0) si le service repond en 200-399.
+            - name: CHECK_COMMAND
+              value: "wget -q -T 5 -O /dev/null http://devops-mails/ "
+            - name: CHECK_INTERVAL
+              value: "60s"
+            - name: REPEAT
+              value: "false"
+            - name: MAIL_TARGETS
+              value: "ops@eadn.dz"
+            - name: MAIL_SUBJECT
+              value: "[devops-mails] check k8s-http-check a declenche"
+            - name: MAIL_BODY
+              value: "Le check configure sur le worker k8s est passe a vrai."
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]

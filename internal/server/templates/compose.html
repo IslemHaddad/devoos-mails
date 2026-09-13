@@ -1,0 +1,46 @@
+{{ define "compose.html" }}
+{{ template "head" . }}
+<h1>Compose &amp; Send</h1>
+<p class="lead">Sending via <strong>{{ .Config.Host }}:{{ .Config.Port }}</strong>
+  as {{ if .Config.FromName }}{{ .Config.FromName }} &lt;{{ .Config.FromEmail }}&gt;{{ else }}{{ .Config.FromEmail }}{{ end }}.</p>
+
+{{ if .Error }}<div class="banner err">{{ .Error }}</div>{{ end }}
+
+{{ if .Results }}
+  <div class="banner {{ if .Failed }}warn{{ else }}ok{{ end }}">
+    Sent {{ .Sent }} / {{ len .Results }} messages.{{ if .Failed }} {{ .Failed }} failed.{{ end }}
+  </div>
+  <table class="results">
+    <thead><tr><th>Recipient</th><th>Status</th><th>Detail</th></tr></thead>
+    <tbody>
+    {{ range .Results }}
+      <tr class="{{ if .OK }}row-ok{{ else }}row-fail{{ end }}">
+        <td>{{ .Recipient }}</td>
+        <td>{{ if .OK }}✓ sent{{ else }}✗ failed{{ end }}</td>
+        <td>{{ .Error }}</td>
+      </tr>
+    {{ end }}
+    </tbody>
+  </table>
+{{ end }}
+
+<form method="post" action="/send" class="form">
+  <label>Targets <span class="muted">(one per line, or comma/semicolon separated)</span>
+    <textarea name="recipients" rows="5" placeholder="alice@example.com&#10;bob@example.com" required>{{ .RecipientsRaw }}</textarea>
+  </label>
+  <label>Subject
+    <input type="text" name="subject" value="{{ .Subject }}" required>
+  </label>
+  <label>Format
+    <select name="format">
+      <option value="plain" {{ if not .FormatHTML }}selected{{ end }}>Plain text</option>
+      <option value="html" {{ if .FormatHTML }}selected{{ end }}>HTML</option>
+    </select>
+  </label>
+  <label>Body
+    <textarea name="body" rows="12" placeholder="Your message…">{{ .Body }}</textarea>
+  </label>
+  <button type="submit" class="btn primary">Send to targets</button>
+</form>
+{{ template "foot" . }}
+{{ end }}

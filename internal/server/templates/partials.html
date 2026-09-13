@@ -1,0 +1,28 @@
+{{ define "head" }}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ .Title }} · devops-mails</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">✉ devops-mails</div>
+  <nav>
+    <a href="/" class="{{ if eq .Active "home" }}active{{ end }}">Dashboard</a>
+    <a href="/config" class="{{ if eq .Active "config" }}active{{ end }}">SMTP Config</a>
+    <a href="/compose" class="{{ if eq .Active "compose" }}active{{ end }}">Compose</a>
+    <a href="/agents" class="{{ if eq .Active "agents" }}active{{ end }}">Agents</a>
+  </nav>
+</header>
+<main class="container">
+{{ end }}
+
+{{ define "foot" }}
+</main>
+<footer class="footer">devops-mails — SMTP relay configuration &amp; sender</footer>
+</body>
+</html>
+{{ end }}

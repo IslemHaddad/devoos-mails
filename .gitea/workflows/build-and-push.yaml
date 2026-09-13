@@ -1,0 +1,117 @@
+# CI devops-mails : build + push de l'image (ko) vers le registre Gitea, puis
+# ecriture du tag dans k8s/kustomization.yaml pour qu'ArgoCD converge.
+#
+# Secrets requis :
+#   CI_PUSH_USER / CI_PUSH_TOKEN : push de l'image vers le registre Gitea.
+#   GITEA_TOKEN                  : commit du tag (permissions.contents: write).
+#
+# ── Portage depuis la CI Java (Jib) ──────────────────────────────────────────
+# Jib poussait l'image sans daemon Docker. L'equivalent Go est ko : il compile
+# le binaire et pousse l'image OCI directement au registre, sans Docker-in-Docker
+# et sans Dockerfile. --insecure-registry remplace -DsendCredentialsOverHttp
+# (le registre Gitea est joint en HTTP par nom de domaine, jamais par IP).
+# On suppose, comme pour le runner maven cote Java, que la toolchain Go est deja
+# dans l'image du runner -- pas de setup-go qui la retelechargerait a chaque run.
+name: build-and-push
+on:
+  push:
+    branches: [ main ]
+    tags: [ "v*" ]
+  workflow_dispatch:
+
+env:
+  IMAGE_REGISTRY: gitea.eadn.dz
+  IMAGE_GROUP: eadn-factory
+  IMAGE_NAME: devops-mails
+  KO_VERSION: "0.15.2"
+  GITEA_HOST: gitea.eadn.dz
+
+jobs:
+  build-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Tag image (SHA court)
+        id: meta
+        run: echo "tag=${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
+
+      - name: Installer ko
+        run: |
+          set -euo pipefail
+          curl -sSfL "https://github.com/ko-build/ko/releases/download/v${KO_VERSION}/ko_${KO_VERSION}_Linux_x86_64.tar.gz" \
+            | tar -xz ko
+          install -m 0755 ko /usr/local/bin/ko
+          ko version
+
+      # ko lit ~/.docker/config.json comme docker/Jib. On l'ecrit a la main :
+      # `ko login` suppose du HTTPS, or le registre est en HTTP.
+      - name: Auth registre
+        env:
+          REG_USER: ${{ secrets.CI_PUSH_USER }}
+          REG_TOKEN: ${{ secrets.CI_PUSH_TOKEN }}
+        run: |
+          set -euo pipefail
+          : "${REG_USER:?CI_PUSH_USER est vide}"
+          : "${REG_TOKEN:?CI_PUSH_TOKEN est vide}"
+          auth=$(printf '%s:%s' "$REG_USER" "$REG_TOKEN" | base64 -w0)
+          mkdir -p "$HOME/.docker"
+          cat > "$HOME/.docker/config.json" <<EOF
+          { "auths": { "${IMAGE_REGISTRY}": { "auth": "${auth}" } } }
+          EOF
+          chmod 600 "$HOME/.docker/config.json"
+
+      # --bare : pousse exactement sur KO_DOCKER_REPO, sans suffixe d'import-path.
+      # Deux images : master (.) et worker (./cmd/worker).
+      - name: Build + push images (ko)
+        id: build
+        env:
+          IMAGE_TAG: ${{ steps.meta.outputs.tag }}
+        run: |
+          set -euo pipefail
+          KO_DOCKER_REPO="${IMAGE_REGISTRY}/${IMAGE_GROUP}/${IMAGE_NAME}" \
+            ko build --bare --insecure-registry --tags "${IMAGE_TAG},dev" .
+          KO_DOCKER_REPO="${IMAGE_REGISTRY}/${IMAGE_GROUP}/${IMAGE_NAME}-worker" \
+            ko build --bare --insecure-registry --tags "${IMAGE_TAG},dev" ./cmd/worker
+
+      # ── Bascule GitOps : la CI ecrit le tag, ArgoCD converge ──────────────────
+      # `[skip ci]` INDISPENSABLE : sans lui ce commit relancerait ce workflow en
+      # boucle. `sed` plutot que `kustomize edit` (absent du runner) : le motif
+      # s'ancre sur `- name: <image>`, `n` passe a la ligne SUIVANTE (newTag).
+      - name: Committer le tag pour ArgoCD
+        env:
+          TAG: ${{ steps.meta.outputs.tag }}
+          PUSH_USER: gitea-ci
+          PUSH_TOKEN: ${{ secrets.GITEA_TOKEN }}
+          # `env.` et NON `secrets.` : GITEA_HOST est declare dans le env: du workflow.
+          PUSH_HOST: ${{ env.GITEA_HOST }}
+        run: |
+          set -euo pipefail
+          # Deux entrees d'image (master + worker) : on reecrit le tag des deux.
+          for img in "${IMAGE_NAME}" "${IMAGE_NAME}-worker"; do
+            sed -i "/^  - name: ${IMAGE_REGISTRY}\/${IMAGE_GROUP}\/${img}$/{n;s/newTag: .*/newTag: ${TAG}/}" k8s/kustomization.yaml
+          done
+          if git diff --quiet -- k8s/kustomization.yaml; then
+            echo "kustomization.yaml deja sur ${TAG} -- rien a committer."
+            exit 0
+          fi
+          # Garde-fou : les DEUX tags doivent etre ecrits, sinon un motif a derive.
+          if [ "$(grep -c "newTag: ${TAG}" k8s/kustomization.yaml)" -ne 2 ]; then
+            echo "ECHEC : tag ${TAG} non ecrit sur les deux images -- motif sed obsolete ?"; exit 1
+          fi
+          git config user.name  "gitea-ci"
+          git config user.email "ci@eadn.dz"
+          git add k8s/kustomization.yaml
+          git commit -m "ci: deployer ${TAG} [skip ci]"
+          # Jeton via fichier d'identifiants, PAS dans l'URL (sinon visible en clair
+          # dans `ps` et les erreurs git).
+          : "${PUSH_HOST:?GITEA_HOST est vide -- verifier le bloc env: du workflow}"
+          : "${PUSH_TOKEN:?GITEA_TOKEN est vide -- verifier permissions.contents: write}"
+          creds=$(mktemp)
+          trap 'rm -f "$creds"' EXIT
+          chmod 600 "$creds"
+          printf 'https://%s:%s@%s\n' "$PUSH_USER" "$PUSH_TOKEN" "$PUSH_HOST" > "$creds"
+          git -c credential.helper="store --file=$creds" \
+              push "https://${PUSH_HOST}/${GITHUB_REPOSITORY}.git" HEAD:main

@@ -1,0 +1,16 @@
+# Stockage persistant pour la config SMTP (smtp-config.json est ecrit ici).
+# Longhorn en ReadWriteOnce : un seul noeud monte le volume a la fois, d'ou
+# replicas: 1 + strategie Recreate dans le Deployment (pas de multi-attach).
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: devops-mails-data
+  labels:
+    app: devops-mails
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: longhorn
+  resources:
+    requests:
+      storage: 256Mi
