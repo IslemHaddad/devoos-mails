@@ -3,6 +3,7 @@
 A small Go web app to configure an SMTP relay (postfix-style) and send mail to a
 list of target recipients from a browser UI.
 
+
 Built with [Gin](https://github.com/gin-gonic/gin) (HTTP) and
 [go-mail](https://github.com/wneessen/go-mail) (SMTP).
 
