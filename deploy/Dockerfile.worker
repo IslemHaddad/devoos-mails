@@ -1,0 +1,15 @@
+# Build manuel du worker. La CI utilise ko (voir .ko.yaml) ; ce Dockerfile est
+# un repli pour `docker build -f deploy/Dockerfile.worker .`.
+# Base alpine (et non distroless) : le worker execute ses checks via `sh -c`.
+FROM golang:1.22 AS build
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o /devops-mails-worker ./cmd/worker
+
+FROM alpine:3.20
+RUN adduser -D -u 65532 agent
+COPY --from=build /devops-mails-worker /usr/local/bin/devops-mails-worker
+USER 65532
+ENTRYPOINT ["/usr/local/bin/devops-mails-worker"]

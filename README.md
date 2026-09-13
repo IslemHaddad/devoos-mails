@@ -45,13 +45,15 @@ binary is self-contained.
 
 Manifests live in `k8s/` (kustomize) and deploy to namespace `eadn`:
 
-| File               | Purpose                                                          |
-|--------------------|------------------------------------------------------------------|
-| `pvc.yaml`         | Longhorn RWO PVC (`storageClassName: longhorn`) for the config   |
-| `deployment.yaml`  | 1 replica, `Recreate` strategy (RWO), distroless nonroot, probes |
-| `service.yaml`     | ClusterIP `:80 → :8080`                                          |
-| `ingress.yaml`     | `ingressClassName: nginx`, host `devops-mails.eadn.dz`           |
-| `kustomization.yaml` | Ties them together; image tag is patched by CI                 |
+| File                    | Purpose                                                          |
+|-------------------------|------------------------------------------------------------------|
+| `pvc.yaml`              | Longhorn RWO PVC (`storageClassName: longhorn`) for the config   |
+| `deployment.yaml`       | master: 1 replica, `Recreate` (RWO), distroless nonroot, probes  |
+| `service.yaml`          | ClusterIP `:80 → :8080` (UI) and `:8671` (agent)                 |
+| `ingress.yaml`          | `ingressClassName: nginx`, host `devops-mails.eadn.dz`           |
+| `worker-deployment.yaml`| a worker pod running a check and triggering the master           |
+| `agent-secret.yaml`     | shared bearer token for the master ↔ worker channel              |
+| `kustomization.yaml`    | ties them together; both image tags are patched by CI            |
 
 The config file is written to `/data/smtp-config.json` on the PVC. Because the
 PVC is ReadWriteOnce, the Deployment is pinned to **1 replica** with the
@@ -73,7 +75,49 @@ Required secrets: `CI_PUSH_USER` / `CI_PUSH_TOKEN` (registry push),
 `.ko.yaml` base image (`distroless:nonroot`, uid 65532) matches the
 Deployment's `securityContext`.
 
+The CI builds **two images** — `devops-mails` (master) and
+`devops-mails-worker` — and patches both tags into `kustomization.yaml`.
+
 > Edit before first deploy: the ingress host/class, the namespace in
-> `kustomization.yaml`, and the registry path if your group differs.
-# devoos-mails
-# devoos-mails
+> `kustomization.yaml`, the registry path if your group differs, and the token
+> in `agent-secret.yaml`.
+
+## Master / worker agents
+
+The master (this app) exposes an **agent listener on `:8671`** alongside the web
+UI. A **worker** (`cmd/worker`, a separate binary/image) runs a check command on
+an interval; when the command exits `0` ("true") it POSTs a trigger to the
+master, which relays an email through the SMTP config set in the UI. The worker
+owns the task (check + recipients + subject/body); the master authenticates with
+a shared bearer token (`AGENT_TOKEN`) and sends.
+
+By default a worker is **edge-triggered**: it mails once when a check goes
+false→true, not every interval (set `REPEAT=true` to mail on every true check).
+Registered workers and recent triggers show on the **Agents** page of the UI.
+
+### Run a worker as a systemd service
+
+```bash
+go build -o devops-mails-worker ./cmd/worker
+sudo install -m 0755 devops-mails-worker /usr/local/bin/
+sudo mkdir -p /etc/devops-mails
+sudo install -m 0600 deploy/systemd/agent.env /etc/devops-mails/agent.env   # then edit it
+sudo cp deploy/systemd/devops-mails-agent.service /etc/systemd/system/
+sudo systemctl daemon-reload && sudo systemctl enable --now devops-mails-agent
+```
+
+All settings are environment variables (see `deploy/systemd/agent.env`):
+`MASTER_URL`, `AGENT_TOKEN`, `WORKER_NAME`, `CHECK_COMMAND`, `CHECK_INTERVAL`,
+`REPEAT`, `MAIL_TARGETS`, `MAIL_SUBJECT`, `MAIL_BODY`, `MAIL_HTML`.
+
+### Run a worker as a Kubernetes pod
+
+`k8s/worker-deployment.yaml` runs the worker image with the same settings as
+env vars. Note a pod only sees **its own** filesystem — for host file checks use
+the systemd service (or mount a `hostPath`/shared volume); the pod worker suits
+network/HTTP or mounted-volume checks. In-cluster it reaches the master at
+`http://devops-mails:8671`. External systemd workers need `:8671` exposed via a
+dedicated LoadBalancer/NodePort Service (the HTTP ingress only routes `:80`).
+
+The worker image uses an `alpine` base (not distroless) because checks run via
+`sh -c`.
